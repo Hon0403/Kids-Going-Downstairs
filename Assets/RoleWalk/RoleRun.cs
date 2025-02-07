@@ -71,49 +71,56 @@ public class RoleRun : MonoBehaviour
         // 設置移動方向
         direction = Vector3.zero;
 
-        // 使用 Physics2D 檢測角色是否在地面上
-        LayerMask layerMask = LayerMask.GetMask("Ground"); // 確保"Ground"是正確的層
+        // 檢測角色是否在地面上
+        LayerMask layerMask = LayerMask.GetMask("Ground");
         isGrounded = Physics2D.OverlapCircle(groundCheck.position, 0.05f, layerMask);
 
+        // 先檢查 Shift 是否被按住
+        bool shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-
-        // 判斷按鍵輸入並設置方向
-        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
+        // **只有當 Shift 先被按住，然後按方向鍵才進入衝刺**
+        if (shiftHeld && (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)))
         {
-            roleani.SetInteger("Status", 1);
+            isSprinting = true;
+            roleani.SetBool("isRunning", true);
             direction = Vector3.left; // 向左移動
-            if (SpriteRenderer.flipX == true)
-            {
-                SpriteRenderer.flipX = false;
-            }
+            if (SpriteRenderer.flipX == true) SpriteRenderer.flipX = false;
         }
-        else if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
+        else if (shiftHeld && (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)))
         {
-            roleani.SetInteger("Status", 1);
+            isSprinting = true;
+            roleani.SetBool("isRunning", true);
             direction = Vector3.right; // 向右移動
-            if (SpriteRenderer.flipX == false)
-            {
-                SpriteRenderer.flipX = true;
-            }
+            if (SpriteRenderer.flipX == false) SpriteRenderer.flipX = true;
         }
         else
         {
-            roleani.SetInteger("Status", 0);
-        }
-
-        // 判斷是否在衝刺
-        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) 
-        { 
-            isSprinting = true; 
-            roleani.SetBool("isRunning", true); 
-        } 
-        else 
-        { 
-            isSprinting = false; 
+            isSprinting = false;
             roleani.SetBool("isRunning", false);
         }
 
-        // 如果角色在地面上，才能跳躍
+        // 如果沒有衝刺，判斷是否只是普通移動
+        if (!isSprinting)
+        {
+            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
+            {
+                roleani.SetInteger("Status", 1);
+                direction = Vector3.left;
+                if (SpriteRenderer.flipX == true) SpriteRenderer.flipX = false;
+            }
+            else if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
+            {
+                roleani.SetInteger("Status", 1);
+                direction = Vector3.right;
+                if (SpriteRenderer.flipX == false) SpriteRenderer.flipX = true;
+            }
+            else
+            {
+                roleani.SetInteger("Status", 0);
+            }
+        }
+
+        // 跳躍邏輯
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
             rb.velocity = new Vector2(rb.velocity.x, jumpForce);
@@ -124,13 +131,25 @@ public class RoleRun : MonoBehaviour
         roleani.SetBool("isJumping", !isGrounded);
     }
 
+
     // FixedUpdate 用來處理物理運算
     void FixedUpdate()
     {
         float currentSpeed = isSprinting ? sprintSpeed : speed;
-        rb.velocity = new Vector2(direction.x * currentSpeed, rb.velocity.y);
+        float targetVelocityX = direction.x * currentSpeed;
+        float smoothAcceleration = 5f;
 
+        float newVelocityX = Mathf.MoveTowards(rb.velocity.x, targetVelocityX, smoothAcceleration * Time.fixedDeltaTime);
+
+        // 如果角色完全停住但玩家仍在輸入移動指令，則額外推動一點
+        if (Mathf.Abs(rb.velocity.x) < 0.01f && direction.x != 0)
+        {
+            newVelocityX += direction.x * 0.1f; // 給一點額外推動力
+        }
+
+        rb.velocity = new Vector2(newVelocityX, rb.velocity.y);
     }
+
 
     // 在 Scene 視圖中顯示地面檢查範圍
     void OnDrawGizmos()
